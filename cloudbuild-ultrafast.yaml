@@ -1,0 +1,45 @@
+options:
+  machineType: 'E2_HIGHCPU_32'
+  logging: NONE
+  pool:
+    name: 'projects/quendoo-mcp-prod/locations/us-central1/workerPools/fast-pool'
+
+steps:
+  # Pull previous image for caching
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull gcr.io/$PROJECT_ID/quendoo-mcp-server:latest || exit 0
+
+  # Build with BuildKit and layer caching
+  - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    args:
+      - 'build'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/quendoo-mcp-server:latest'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/quendoo-mcp-server:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/quendoo-mcp-server:$SHORT_SHA'
+      - '.'
+
+  # Push images in parallel
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/quendoo-mcp-server:latest']
+    waitFor: ['-']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/quendoo-mcp-server:$SHORT_SHA']
+    waitFor: ['-']
+
+images:
+  - 'gcr.io/$PROJECT_ID/quendoo-mcp-server:latest'
+  - 'gcr.io/$PROJECT_ID/quendoo-mcp-server:$SHORT_SHA'
+
+timeout: '300s'

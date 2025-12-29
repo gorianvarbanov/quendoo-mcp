@@ -1,0 +1,51 @@
+# Dockerfile for Web App (React + Flask backend)
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install Node.js for building React app
+RUN apt-get update && apt-get install -y \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy React app source
+COPY web-app/package.json web-app/package-lock.json* ./web-app/
+WORKDIR /app/web-app
+RUN npm install
+
+COPY web-app/public ./public
+COPY web-app/src ./src
+
+# Build React app with environment variables
+ARG REACT_APP_STYTCH_PUBLIC_TOKEN
+ARG REACT_APP_API_URL
+ENV REACT_APP_STYTCH_PUBLIC_TOKEN=${REACT_APP_STYTCH_PUBLIC_TOKEN}
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+
+RUN npm run build
+
+# Copy Python backend code
+WORKDIR /app
+COPY *.py ./
+COPY tools ./tools
+
+# Move React build to static folder
+RUN mv web-app/build static
+
+# Expose port
+EXPOSE 8080
+
+# Set environment variables
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+# Run Flask server with Stytch endpoints and React app
+CMD ["python", "stytch_server.py"]

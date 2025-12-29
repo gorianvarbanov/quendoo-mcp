@@ -1,0 +1,16 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.web'
+      - '-t'
+      - 'gcr.io/quednoo-chatgtp-mailing/quendoo-web-app'
+      - '--build-arg'
+      - 'REACT_APP_STYTCH_PUBLIC_TOKEN=public-token-live-b58a2742-33c6-4356-a083-879416574e5e'
+      - '--build-arg'
+      - 'REACT_APP_API_URL=https://quendoo-web-app-880871219885.us-central1.run.app'
+      - '.'
+images:
+  - 'gcr.io/quednoo-chatgtp-mailing/quendoo-web-app'
+timeout: 1200s

@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application files
+COPY auth_server.py .
+COPY templates/ templates/
+
+# Create tools directory and copy only needed files
+RUN mkdir -p tools
+COPY tools/database.py tools/
+COPY tools/jwt_auth.py tools/
+
+# Create minimal __init__.py for tools package
+RUN echo "# Tools package for auth server" > tools/__init__.py
+
+# Set environment variables
+ENV HOST=0.0.0.0
+ENV AUTH_PORT=8080
+
+EXPOSE 8080
+
+CMD ["python", "auth_server.py"]

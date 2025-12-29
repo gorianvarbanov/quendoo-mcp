@@ -1,0 +1,12 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/quednoo-chatgtp-mailing/quendoo-web-app:oauth-callback'
+      - '-f'
+      - 'web-app/Dockerfile'
+      - '.'
+images:
+  - 'gcr.io/quednoo-chatgtp-mailing/quendoo-web-app:oauth-callback'
+timeout: 1200s

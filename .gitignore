@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# Logs
+*.log
+deploy.log
+deploy-oauth.log
+
+# OS
+.DS_Store
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+[Dd]esktop.ini
+
+# Temporary
+*.tmp
+*.temp
+nul
+
+# Build artifacts
+*.bak
+.gcloudignore
+
+# Secrets (don't commit!)
+*_credentials.json
+service-account*.json

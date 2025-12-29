@@ -1,0 +1,5 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.unified', '-t', 'gcr.io/quednoo-chatgtp-mailing/quendoo-mcp-unified', '.']
+images:
+  - 'gcr.io/quednoo-chatgtp-mailing/quendoo-mcp-unified'
