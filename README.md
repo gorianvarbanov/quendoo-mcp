@@ -1,6 +1,6 @@
 # Quendoo MCP Server
 
-[![Latest Release](https://img.shields.io/github/v/release/YOUR_USERNAME/quendoo-mcp)](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/gorianvarbanov/quendoo-mcp)](https://github.com/gorianvarbanov/quendoo-mcp/releases/latest)
 
 **One-click installer for Quendoo Property Management System integration with Claude Desktop**
 
@@ -19,7 +19,7 @@ Model Context Protocol (MCP) server for Quendoo PMS with integrated email and vo
 
 ### Windows Installation (5 minutes)
 
-1. **Download** the [latest release](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+1. **Download** the [latest release](https://github.com/gorianvarbanov/quendoo-mcp/releases/latest)
 2. **Extract** to a folder (e.g., `C:\quendoo-mcp`)
 3. **Run** `install.bat`
 4. **Enter** your Quendoo API key when prompted
@@ -212,7 +212,7 @@ Built with:
 
 ## 🚀 Ready to Get Started?
 
-1. [Download the latest release](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+1. [Download the latest release](https://github.com/gorianvarbanov/quendoo-mcp/releases/latest)
 2. Run `install.bat`
 3. Start using Claude with your Quendoo data!
 
