@@ -30,9 +30,11 @@ server = FastMCP(
         "- cleanup_quendoo_api_key: Remove cached API key\n\n"
         "📋 AVAILABLE TOOLS:\n"
         "- Property Management: Properties, booking modules, availability\n"
+        "- Booking Offers: Get pricing and availability (auto-detects first active booking module)\n"
         "- Bookings: Create, update, retrieve bookings\n"
         "- Email: Send HTML emails\n"
         "- Voice Calls: Automated calls with Bulgarian support\n\n"
+        "💡 TIP: For booking offers, you don't need to specify booking module code - it will use the first active one automatically.\n"
     ),
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8080")),
@@ -161,9 +163,9 @@ def get_bookings() -> dict:
 
 @server.tool()
 def get_booking_offers(
-    bm_code: str,
     date_from: str,
     nights: int,
+    bm_code: str | None = None,
     api_lng: str | None = None,
     guests: list[dict] | None = None,
     currency: str | None = None
@@ -172,15 +174,28 @@ def get_booking_offers(
     Fetch booking offers for a booking module code and stay dates.
 
     Args:
-        bm_code: Booking module code (e.g., 'BM001')
         date_from: Check-in date in YYYY-MM-DD format
         nights: Number of nights
+        bm_code: Booking module code (e.g., 'neXu98qdmw'). If not provided, uses first active module. Optional.
         api_lng: Language code. Optional.
-        guests: List of guest objects. Optional.
-        currency: Currency code (e.g., 'EUR', 'USD'). Optional.
+        guests: List of guest objects with format [{"adults": 2, "children_by_ages": [5, 8]}]. Optional.
+        currency: Currency code (e.g., 'BGN', 'EUR', 'USD'). Optional.
     """
     print(f"[DEBUG TOOL] get_booking_offers called", file=sys.stderr, flush=True)
     client = get_quendoo_client()
+
+    # If bm_code not provided, get first active booking module
+    if not bm_code:
+        print(f"[DEBUG] No bm_code provided, fetching first active module", file=sys.stderr, flush=True)
+        settings = client.get("/Property/getPropertySettings", params={"names": "booking_modules"})
+        booking_modules = settings.get("data", {}).get("booking_modules", [])
+        active_modules = [m for m in booking_modules if m.get("is_active")]
+        if not active_modules:
+            return {"error": "No active booking modules found"}
+        bm_code = active_modules[0]["code"]
+        print(f"[DEBUG] Using first active module: {bm_code}", file=sys.stderr, flush=True)
+
+    # Build params dict
     params = {
         "bm_code": bm_code,
         "date_from": date_from,
@@ -188,8 +203,17 @@ def get_booking_offers(
         "api_lng": api_lng,
         "currency": currency
     }
-    payload = {"guests": guests} if guests else {}
-    return client.post("/Booking/getBookingOffers", params=params, json=payload)
+
+    # Convert guests list to URL parameters format: guests[0][adults]=2&guests[0][children_by_ages][0]=5
+    if guests:
+        for i, guest_room in enumerate(guests):
+            if "adults" in guest_room:
+                params[f"guests[{i}][adults]"] = guest_room["adults"]
+            if "children_by_ages" in guest_room:
+                for j, age in enumerate(guest_room["children_by_ages"]):
+                    params[f"guests[{i}][children_by_ages][{j}]"] = age
+
+    return client.get("/Property/getBookingOffers", params=params)
 
 
 @server.tool()
