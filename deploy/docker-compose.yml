@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  quendoo-mcp:
+    build: ..
+    container_name: quendoo-mcp
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - MCP_TRANSPORT=sse
+      - HOST=0.0.0.0
+      - PORT=8080
+      - QUENDOO_API_KEY=${QUENDOO_API_KEY}
+      - EMAIL_API_KEY=${EMAIL_API_KEY}
+      - QUENDOO_AUTOMATION_BEARER=${QUENDOO_AUTOMATION_BEARER}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/sse"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
