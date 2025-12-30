@@ -1,222 +1,219 @@
-# Quendoo PMS & Communication MCP Server
+# Quendoo MCP Server
 
-Model Context Protocol (MCP) server for Quendoo Property Management System with integrated email and voice call capabilities.
+[![Latest Release](https://img.shields.io/github/v/release/YOUR_USERNAME/quendoo-mcp)](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+
+**One-click installer for Quendoo Property Management System integration with Claude Desktop**
+
+Model Context Protocol (MCP) server for Quendoo PMS with integrated email and voice call capabilities.
+
+## ✨ Features
+
+- 🏨 **Property Management** - Manage properties, rooms, rates
+- 📅 **Availability Checking** - Real-time availability queries
+- 📦 **Booking Operations** - Create, view, manage bookings
+- 📧 **Email Service** - Send HTML emails to guests
+- 📞 **Voice Calls** - Automated voice calls with text-to-speech
+- 🔑 **API Key Management** - Secure 24-hour API key caching
 
 ## 🚀 Quick Start
 
-### Windows Installation (Recommended)
+### Windows Installation (5 minutes)
 
-1. Download or clone this repository
-2. Run `install.bat`
-3. Enter your Quendoo API key when prompted
-4. Restart Claude Desktop
-5. Done! 🎉
+1. **Download** the [latest release](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+2. **Extract** to a folder (e.g., `C:\quendoo-mcp`)
+3. **Run** `install.bat`
+4. **Enter** your Quendoo API key when prompted
+5. **Restart** Claude Desktop
+6. **Done!** 🎉
 
-For detailed instructions, see [INSTALLATION.md](./INSTALLATION.md)
+For detailed instructions, see [INSTALLATION.md](./INSTALLATION.md) or [QUICK_START.md](./QUICK_START.md)
+
+### Verify Installation
+
+Open Claude Desktop and ask:
+```
+Check my Quendoo API key status
+```
 
 ---
 
-## Features
+## 📚 Documentation
 
-### 🏨 Quendoo PMS Integration
-- Property management
-- Booking operations
-- Availability checking
-- Room and rate management
+- **[QUICK_START.md](./QUICK_START.md)** - Get started in 5 minutes
+- **[INSTALLATION.md](./INSTALLATION.md)** - Detailed installation guide
+- **[FEATURES.md](./FEATURES.md)** - Complete feature documentation
+- **[API_KEY_SETUP.md](./API_KEY_SETUP.md)** - API key management guide
+- **[RELEASE_NOTES.md](./RELEASE_NOTES.md)** - Version history
 
-### 📧 Email Service
-- Send HTML emails via Quendoo cloud function
-- Customizable subject and recipients
+---
 
-### 📞 Voice Calls
-- Automated voice calls with text-to-speech
-- Bulgarian language support via Vonage/Nexmo
+## 🔧 Requirements
 
-## Deployment
+- **Windows 10/11** (Mac/Linux coming soon)
+- **Python 3.11+** ([Download](https://www.python.org/downloads/))
+- **Claude Desktop** ([Download](https://claude.ai/download))
+- **Quendoo API Key** (from your Quendoo dashboard)
 
-### Cloud Run (Production)
+---
 
-**Service URL:** `https://quendoo-mcp-server-851052272168.us-central1.run.app/sse`
+## 💡 Usage Examples
 
-Deployed to Google Cloud Run with:
-- Auto-scaling
-- HTTPS/SSE transport
-- Environment-based configuration
-
-### Deploy/Update
-
-```bash
-gcloud run deploy quendoo-mcp-server \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars "EMAIL_API_KEY=your-key,QUENDOO_AUTOMATION_BEARER=your-token" \
-  --platform managed \
-  --project quendoo-mcp-prod
+### Check API Key Status
+```
+Check my Quendoo API key status
 ```
 
-## Configuration
-
-### Two Deployment Modes
-
-#### Mode 1: Simple (No OAuth)
-Users call `set_quendoo_api_key` tool to save API keys for 24 hours.
-
-**Environment Variables:**
-- `EMAIL_API_KEY` - API key for email cloud function
-- `QUENDOO_AUTOMATION_BEARER` - Bearer token for voice calls
-- `PORT` - Server port (auto-set by Cloud Run)
-- `HOST` - Server host (default: 0.0.0.0)
-- `MCP_TRANSPORT` - Transport protocol (default: sse)
-
-**Claude Desktop Configuration:**
-```json
-{
-  "mcpServers": {
-    "quendoo-pms": {
-      "url": "https://quendoo-mcp-server-851052272168.us-central1.run.app/sse"
-    }
-  }
-}
+### Query Availability
+```
+Show me availability for March 2025
 ```
 
-#### Mode 2: OAuth with Database (Production)
-Users register via web interface. API keys stored permanently in PostgreSQL.
-
-**Environment Variables:**
-- All from Mode 1, PLUS:
-- `DATABASE_URL` - PostgreSQL connection string
-- `JWT_SECRET` - Secret key for JWT tokens (32+ chars)
-- `FLASK_SECRET_KEY` - Flask session secret (32+ chars)
-
-**Claude Desktop Configuration:**
-```json
-{
-  "mcpServers": {
-    "quendoo-pms": {
-      "url": "https://quendoo-mcp-server-851052272168.us-central1.run.app/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_JWT_TOKEN_FROM_REGISTRATION"
-      }
-    }
-  }
-}
+### Get Room Details
+```
+What rooms do we have?
 ```
 
-**📘 See [OAUTH_DEPLOYMENT.md](OAUTH_DEPLOYMENT.md) for complete OAuth setup guide.**
-
-## Usage
-
-### 1. Set Your API Key (First Time)
-
+### Send Email
 ```
-User: "Set my Quendoo API key: abc123xyz456"
-Claude: ✅ Quendoo API key saved successfully for 24 hours!
+Send email to guest@example.com with subject "Booking Confirmation"
 ```
 
-### 2. Use PMS Features
-
+### Make Voice Call
 ```
-User: "Show me all my properties"
-Claude: [Lists properties using your saved API key]
+Call +359888123456 and say "Your booking is confirmed"
 ```
 
-### 3. Send Emails
+---
 
+## 🏗️ Architecture
+
+**Local Server (Recommended)**
 ```
-User: "Send email to guest@example.com with subject 'Booking Confirmation'"
-Claude: [Sends HTML email via cloud function]
-```
-
-### 4. Make Voice Calls
-
-```
-User: "Call +359888123456 and say 'Your booking is confirmed for tomorrow at 2pm'"
-Claude: [Initiates automated voice call]
-```
-
-## API Key Management
-
-### Per-Client Storage
-- API keys are stored per-client for 24 hours
-- No need to re-enter after initial setup
-- Automatic expiration and cleanup
-
-### Important Notes
-- **Global fallback:** If MCP doesn't provide `client_id`, API keys are shared across clients on the same container
-- **Acceptable for small-scale:** Cloud Run scales to multiple containers, reducing conflicts
-- **24-hour TTL:** Keys automatically expire after 24 hours
-
-### Tools
-
-- `set_quendoo_api_key(api_key)` - Store PMS API key
-- `clear_quendoo_api_key()` - Remove stored key
-- `set_email_api_key(api_key)` - Store email API key (if different)
-- `clear_email_api_key()` - Remove email key
-
-## Architecture
-
-```
-Claude Desktop
-    ↓ (SSE)
-Google Cloud Run (MCP Server)
-    ↓
-    ├─→ Quendoo PMS API (properties, bookings, availability)
-    ├─→ Email Cloud Function (send_quendoo_email)
-    └─→ Voice Cloud Function (make_call → Vonage)
+Claude Desktop → server_simple.py (local) → Quendoo API
+                    ↓
+               API Key Cache (24h)
+                    ↓
+                 .env file
 ```
 
-## Development
+**Benefits:**
+- ✅ Simple setup
+- ✅ Secure (keys stay local)
+- ✅ Fast (no network hop)
+- ✅ Each user has own API key
 
-### Local Setup
+---
+
+## 🔐 Security
+
+- API keys stored locally in `.env` and cache file
+- 24-hour automatic cache expiration
+- Keys never committed to git (protected by `.gitignore`)
+- No cloud storage of sensitive data
+
+---
+
+## 📦 What's Included
+
+- `install.bat` - One-click Windows installer
+- `server_simple.py` - Main MCP server
+- `api_key_manager.py` - API key management with caching
+- `tools/` - Complete Quendoo API integration
+- Documentation - Complete setup and usage guides
+
+---
+
+## 🔄 API Key Management Tools
+
+Available via Claude:
+
+- `set_quendoo_api_key(api_key)` - Set your API key (cached for 24h)
+- `get_quendoo_api_key_status()` - Check API key status and expiry
+- `cleanup_quendoo_api_key()` - Remove cached API key
+
+See [API_KEY_SETUP.md](./API_KEY_SETUP.md) for details.
+
+---
+
+## 🛠️ Development
+
+### Local Testing
 
 ```bash
 # Install dependencies
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your keys
+# Set your API key
+python api_key_manager.py set YOUR_API_KEY
 
-# Run locally
-python server.py
+# Test the server
+python server_simple.py
 ```
 
 ### Project Structure
 
 ```
 quendoo-mcp/
-├── server.py              # Main MCP server
-├── tools/
-│   ├── api_keys.py       # Per-client API key management
-│   ├── auth.py           # Authentication tools
-│   ├── client.py         # Quendoo HTTP client
-│   ├── property.py       # Property management tools
-│   ├── booking.py        # Booking tools
-│   ├── availability.py   # Availability tools
-│   ├── email.py          # Email sending tools
-│   └── automation.py     # Voice call tools
-├── Dockerfile            # Cloud Run container
-└── requirements.txt      # Python dependencies
+├── install.bat                  # Windows installer
+├── server_simple.py             # Main MCP server
+├── api_key_manager.py           # API key management
+├── tools/                       # Quendoo API integration
+│   ├── client.py               # Quendoo HTTP client
+│   ├── property.py             # Property tools
+│   ├── booking.py              # Booking tools
+│   ├── availability.py         # Availability tools
+│   ├── email.py                # Email tools
+│   └── automation.py           # Voice call tools
+└── requirements.txt            # Python dependencies
 ```
 
-## Security
+---
 
-- API keys stored in memory only (not persisted)
-- 24-hour automatic expiration
-- HTTPS/SSE encrypted transport
-- Bearer token auth for cloud functions
-- No keys logged or exposed in responses
+## 🐛 Troubleshooting
 
-## Support
+### Server not connecting?
+1. Check Python is installed: `python --version`
+2. Verify Claude Desktop config: `%APPDATA%\Claude\claude_desktop_config.json`
+3. Restart Claude Desktop
 
-For issues or questions:
-- Check Cloud Run logs: `gcloud logging read "resource.type=cloud_run_revision"`
-- Verify environment variables are set correctly
-- Ensure API keys are valid and not expired
+### API key expired?
+```
+Set my API key to: YOUR_NEW_KEY
+```
 
-## License
+### Need more help?
+- See [INSTALLATION.md](./INSTALLATION.md) for detailed troubleshooting
+- Check [QUICK_START.md](./QUICK_START.md) for common issues
 
-Proprietary - Quendoo PMS Integration
+---
+
+## 📝 Version History
+
+See [RELEASE_NOTES.md](./RELEASE_NOTES.md) for detailed changelog.
+
+**Current Version:** v1.0.0 - Simplified Installer Edition
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+- [FastMCP](https://github.com/jlowin/fastmcp) - MCP framework
+- [Quendoo API](https://quendoo.com) - Property management API
+- [Claude Desktop](https://claude.ai/download) - AI assistant
+
+---
+
+## 📄 License
+
+[Add your license here]
+
+---
+
+## 🚀 Ready to Get Started?
+
+1. [Download the latest release](https://github.com/YOUR_USERNAME/quendoo-mcp/releases/latest)
+2. Run `install.bat`
+3. Start using Claude with your Quendoo data!
+
+**Questions?** Check the [documentation](./INSTALLATION.md) or open an issue.
