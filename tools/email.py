@@ -4,8 +4,6 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
 
-from .api_keys import get_api_key_for_context
-
 
 EMAIL_SERVICE_URL = "https://us-central1-quednoo-chatgtp-mailing.cloudfunctions.net/send_quendoo_email"
 
@@ -69,34 +67,13 @@ def register_email_tools(server: FastMCP, client: EmailClient) -> None:
         Returns:
             Success message with details
         """
-        # Try to get per-client API key, fall back to client's default
-        api_key = get_api_key_for_context(ctx, key_name="email_api_key")
-
+        # Use client's default API key from environment
         try:
             result = client.send_email(
                 to=to,
                 subject=subject,
                 message=message,
-                api_key=api_key,
             )
             return f"Email sent successfully to {to}. Details: {result.get('details', 'No details')}"
         except Exception as e:
             return f"Failed to send email: {str(e)}"
-
-    @server.tool(
-        description="Store an email API key for this client for 24 hours."
-    )
-    def set_email_api_key(api_key: str, ctx: Context) -> str:
-        """Store email service API key for 24 hours."""
-        from .api_keys import set_api_key_for_context
-        set_api_key_for_context(ctx, api_key, key_name="email_api_key")
-        return "Email API key saved for 24 hours."
-
-    @server.tool(
-        description="Clear the stored email API key for this client."
-    )
-    def clear_email_api_key(ctx: Context) -> str:
-        """Clear stored email API key."""
-        from .api_keys import clear_api_key_for_context
-        clear_api_key_for_context(ctx, key_name="email_api_key")
-        return "Email API key cleared."
