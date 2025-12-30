@@ -1,0 +1,12 @@
+# Production Google Cloud Project Configuration
+# This file marks the PRODUCTION project for deployment
+# DO NOT change unless migrating to a different production environment
+
+PRODUCTION_PROJECT=quendoo-mcp-prod
+PRODUCTION_REGION=us-central1
+PRODUCTION_SERVICE=quendoo-mcp-server
+PRODUCTION_URL=https://quendoo-mcp-server-urxohjcmba-uc.a.run.app/sse
+
+# Development/Test Project
+DEV_PROJECT=quednoo-chatgtp-mailing
+DEV_REGION=us-central1

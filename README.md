@@ -43,6 +43,7 @@ Check my Quendoo API key status
 - **[INSTALLATION.md](./INSTALLATION.md)** - Detailed installation guide
 - **[FEATURES.md](./FEATURES.md)** - Complete feature documentation
 - **[API_KEY_SETUP.md](./API_KEY_SETUP.md)** - API key management guide
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - 🚀 Production deployment guide
 - **[RELEASE_NOTES.md](./RELEASE_NOTES.md)** - Version history
 
 ---
