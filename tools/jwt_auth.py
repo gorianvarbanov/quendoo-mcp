@@ -81,16 +81,20 @@ def create_jwt_token(user_id: int, email: str) -> str:
 
 def decode_jwt_token(token: str) -> dict[str, Any] | None:
     """Decode and validate a JWT token using RS256."""
+    import sys
     try:
         payload = jwt.decode(
             token,
             PUBLIC_KEY,
             algorithms=[JWT_ALGORITHM]
         )
+        print(f"[DEBUG JWT] Token decoded successfully! user_id={payload.get('user_id')}", file=sys.stderr, flush=True)
         return payload
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        print(f"[DEBUG JWT] Token expired: {e}", file=sys.stderr, flush=True)
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print(f"[DEBUG JWT] Invalid token error: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         return None
 
 

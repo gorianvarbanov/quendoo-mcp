@@ -13,5 +13,5 @@ ENV MCP_TRANSPORT=sse
 
 EXPOSE 8080
 
-# Run migrations before starting server
-CMD ["sh", "-c", "python run_migrations.py && python server.py"]
+# Run simple server (no OAuth, no migrations needed)
+CMD ["python", "server_simple.py"]

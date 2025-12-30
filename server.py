@@ -1,11 +1,9 @@
-"""Quendoo MCP Server v2.0 - OAuth Edition - FIXED"""
+"""Quendoo MCP Server v3.0 - Full Stytch OAuth with RemoteAuthProvider"""
 import os
 import sys
-from typing import Optional
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
-from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 
 from tools import (
@@ -14,185 +12,59 @@ from tools import (
     register_automation_tools,
     register_email_tools,
 )
-from tools.jwt_auth import decode_jwt_token
 from tools.database import DatabaseClient
-from stytch_auth import StytchAuthenticator
+from stytch_token_verifier import StytchTokenVerifier
 
 
 load_dotenv()
 
+# ========================================
+# CONFIGURE STYTCH OAUTH
+# ========================================
 
-class JWTTokenVerifier(TokenVerifier):
-    """Verify JWT tokens and load user API keys from database."""
+stytch_domain = os.getenv("STYTCH_PROJECT_DOMAIN")
+stytch_project_id = os.getenv("STYTCH_PROJECT_ID")
+mcp_server_url = os.getenv("MCP_SERVER_URL", "https://quendoo-mcp-server-880871219885.us-central1.run.app")
 
-    def __init__(self, db_client: DatabaseClient) -> None:
-        self.db = db_client
+print(f"[AUTH] Configuring Stytch OAuth with custom TokenVerifier", file=sys.stderr, flush=True)
 
-    async def verify_token(self, token: str) -> AccessToken | None:
-        print(f"[DEBUG JWT_VERIFIER] ===== Verifying JWT token =====", file=sys.stderr, flush=True)
-        print(f"[DEBUG JWT_VERIFIER] Token (first 30 chars): {token[:30]}...", file=sys.stderr, flush=True)
+# Create Stytch token verifier
+# Note: Stytch issuer format is "stytch.com/{project_id}"
+stytch_issuer = f"stytch.com/{stytch_project_id}"
+token_verifier = StytchTokenVerifier(
+    jwks_url=f"{stytch_domain}/.well-known/jwks.json",
+    issuer=stytch_issuer,
+    audience=stytch_project_id,
+    required_scopes=["openid", "email", "profile", "quendoo:pms"]
+)
 
-        # Decode JWT token
-        payload = decode_jwt_token(token)
-        print(f"[DEBUG JWT_VERIFIER] Decoded payload: {payload is not None}", file=sys.stderr, flush=True)
-
-        if not payload:
-            print(f"[DEBUG JWT_VERIFIER] JWT decode failed!", file=sys.stderr, flush=True)
-            return None
-
-        user_id = payload.get("user_id")
-        email = payload.get("email")
-        print(f"[DEBUG JWT_VERIFIER] Extracted user_id={user_id}, email={email}", file=sys.stderr, flush=True)
-
-        if not user_id or not email:
-            print(f"[DEBUG JWT_VERIFIER] Missing user_id or email in payload!", file=sys.stderr, flush=True)
-            return None
-
-        # Load user from database to verify they still exist
-        user = self.db.get_user_by_id(user_id)
-        print(f"[DEBUG JWT_VERIFIER] User found in DB: {user is not None}", file=sys.stderr, flush=True)
-
-        if not user:
-            print(f"[DEBUG JWT_VERIFIER] User not found in database!", file=sys.stderr, flush=True)
-            return None
-
-        # Return access token with user_id as client_id
-        # This allows us to use ctx.client_id in the tools
-        client_id = f"user:{user_id}"
-        print(f"[DEBUG JWT_VERIFIER] Returning AccessToken with client_id={client_id}", file=sys.stderr, flush=True)
-        return AccessToken(
-            token=token,
-            client_id=client_id,
-            scopes=[]
-        )
-
-
-class StaticTokenVerifier(TokenVerifier):
-    """Verify a single bearer token provided via environment variable (fallback)."""
-
-    def __init__(self, token: str) -> None:
-        self._token = token
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        if token != self._token:
-            return None
-        return AccessToken(token=token, client_id="static-token", scopes=[])
-
-
-class StytchTokenVerifier(TokenVerifier):
-    """Verify Stytch OAuth tokens and load user API keys from database."""
-
-    def __init__(self, stytch_auth: StytchAuthenticator, db_client: DatabaseClient) -> None:
-        self.stytch = stytch_auth
-        self.db = db_client
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        # Validate Stytch token
-        token_data = self.stytch.validate_token(token)
-        if not token_data:
-            return None
-
-        stytch_user_id = token_data.get("user_id")
-        email = token_data.get("email")
-
-        if not stytch_user_id or not email:
-            return None
-
-        # Load or create user in database
-        user = self.db.get_user_by_stytch_id(stytch_user_id)
-        if not user:
-            # Create new user from Stytch authentication
-            user_id = self.db.create_or_update_stytch_user(
-                stytch_user_id=stytch_user_id,
-                email=email
-            )
-        else:
-            user_id = user["id"]
-
-        # Return access token with user_id as client_id
-        return AccessToken(
-            token=token,
-            client_id=f"stytch:{user_id}",
-            scopes=["quendoo:pms"]
-        )
-
-
-def _get_auth_settings() -> AuthSettings | None:
-    # Use custom OAuth server (issuer is our MCP server)
-    mcp_server_url = os.getenv("MCP_SERVER_URL", "https://quendoo-mcp-server-880871219885.us-central1.run.app")
-    database_url = os.getenv("DATABASE_URL")
-
-    if database_url:
-        # Our MCP server is both issuer and resource server
-        return AuthSettings(issuer_url=mcp_server_url, resource_server_url=mcp_server_url)
-
-    # Fallback: static bearer token
-    token = os.getenv("BEARER_TOKEN")
-    if token:
-        return AuthSettings(issuer_url=mcp_server_url, resource_server_url=mcp_server_url)
-
-    return None
-
-
-def _get_token_verifier(auth: AuthSettings | None) -> Optional[TokenVerifier]:
-    database_url = os.getenv("DATABASE_URL")
-
-    # Priority 1: JWT auth with database (for our OAuth tokens)
-    if database_url and auth:
-        try:
-            db_client = DatabaseClient(database_url)
-            print("JWT authentication enabled", file=sys.stderr)
-            return JWTTokenVerifier(db_client)
-        except Exception as e:
-            print(f"Warning: Failed to initialize JWT auth: {e}.", file=sys.stderr)
-
-    # Priority 2: Stytch OAuth (fallback for direct Stytch tokens)
-    stytch_project_id = os.getenv("STYTCH_PROJECT_ID")
-    stytch_secret = os.getenv("STYTCH_SECRET")
-    stytch_domain = os.getenv("STYTCH_PROJECT_DOMAIN")
-
-    if all([stytch_project_id, stytch_secret, stytch_domain, database_url]) and auth:
-        try:
-            stytch_auth = StytchAuthenticator()
-            db_client = DatabaseClient(database_url)
-            print("Stytch OAuth authentication enabled as fallback", file=sys.stderr)
-            return StytchTokenVerifier(stytch_auth, db_client)
-        except ValueError as e:
-            print(f"Stytch not configured: {e}.", file=sys.stderr)
-        except Exception as e:
-            print(f"Warning: Failed to initialize Stytch auth: {e}.", file=sys.stderr)
-
-    # Priority 3: static bearer token
-    token = os.getenv("BEARER_TOKEN")
-    if token and auth:
-        print("Static token authentication enabled", file=sys.stderr)
-        return StaticTokenVerifier(token)
-
-    return None
+# Create AuthSettings - our server handles OAuth, Stytch validates tokens
+auth_settings = AuthSettings(
+    issuer_url=mcp_server_url,  # Our server is the OAuth issuer
+    resource_server_url=mcp_server_url,  # And also the resource server
+    required_scopes=["openid", "email", "profile", "quendoo:pms"]
+)
 
 # Configure automation and email clients
 automation_bearer = os.getenv("QUENDOO_AUTOMATION_BEARER")
 automation_client = AutomationClient(bearer_token=automation_bearer)
 email_client = EmailClient()
-auth_settings = _get_auth_settings()
-token_verifier = _get_token_verifier(auth_settings)
 
 server = FastMCP(
     name="quendoo-pms-mcp",
     instructions=(
-        "Quendoo Property Management System - Fully Authenticated MCP Server\n\n"
-        "✅ You are authenticated and ready to use all tools immediately.\n"
-        "✅ API credentials are automatically loaded from your account.\n"
-        "✅ No additional setup required - just use the tools!\n\n"
+        "Quendoo Property Management System\n\n"
+        "🔐 OAuth 2.1 Authentication with Stytch\n"
+        "✅ Multi-tenant: Each user sees only their data\n\n"
         "📋 AVAILABLE TOOLS:\n"
         "- Property Management: Properties, booking modules, availability\n"
         "- Bookings: Create, update, retrieve bookings\n"
         "- Email: Send HTML emails\n"
         "- Voice Calls: Automated calls with Bulgarian support\n\n"
-        "All tools work immediately - authentication is automatic!"
+        "Authentication required to access tools."
     ),
-    token_verifier=token_verifier,
     auth=auth_settings,
+    token_verifier=token_verifier,
     host=os.getenv("HOST", "0.0.0.0"),
     port=int(os.getenv("PORT", "8080")),
 )
@@ -205,11 +77,29 @@ from mcp.server.fastmcp import Context
 from tools.client import QuendooClient
 
 
-def extract_user_id(client_id: str) -> str:
-    """Extract numeric user_id from client_id like 'user:123' or 'stytch:456'."""
-    if ":" in client_id:
-        return client_id.split(":", 1)[1]
-    return client_id
+def get_user_id_from_token_sub(ctx: Context) -> str:
+    """
+    Extract user_id from JWT token 'sub' claim.
+
+    BearerAuthProvider validates JWT and provides access to token via get_access_token().
+    The 'sub' (subject) claim in Stytch tokens contains the user_id.
+    """
+    print(f"[DEBUG] Context available attributes: {dir(ctx)}", file=sys.stderr, flush=True)
+
+    # Try to get access token from context
+    try:
+        access_token = ctx.get_access_token()
+        if access_token:
+            print(f"[DEBUG] Access token found, examining claims...", file=sys.stderr, flush=True)
+            # The BearerAuthProvider should have decoded the JWT
+            # and the 'sub' claim should contain the Stytch user_id
+            sub = getattr(access_token, 'sub', None) or getattr(access_token, 'subject', None)
+            print(f"[DEBUG] Token sub claim: {sub}", file=sys.stderr, flush=True)
+            return sub
+    except Exception as e:
+        print(f"[DEBUG] Error getting access token: {e}", file=sys.stderr, flush=True)
+
+    raise PermissionError("Authentication required. No valid access token found.")
 
 
 def get_user_quendoo_client(ctx: Context) -> QuendooClient:
@@ -217,29 +107,43 @@ def get_user_quendoo_client(ctx: Context) -> QuendooClient:
     Load user's Quendoo API key from database and create authenticated client.
 
     This is called INSIDE each tool, not during registration.
+    Requires authentication - will trigger OAuth flow if not authenticated.
     """
-    print(f"[DEBUG] get_user_quendoo_client: client_id={ctx.client_id}", file=sys.stderr, flush=True)
+    print(f"[DEBUG] get_user_quendoo_client called", file=sys.stderr, flush=True)
 
-    # Extract user_id from context
-    user_id = extract_user_id(ctx.client_id)
-    print(f"[DEBUG] Extracted user_id={user_id}", file=sys.stderr, flush=True)
+    # Get Stytch user_id from JWT token
+    stytch_user_id = get_user_id_from_token_sub(ctx)
+    print(f"[DEBUG] Stytch user_id from token: {stytch_user_id}", file=sys.stderr, flush=True)
 
-    # Load user from database
+    # Load user from database by Stytch ID
     database_url = os.getenv("DATABASE_URL")
     db = DatabaseClient(database_url)
-    user = db.get_user_by_id(user_id)
-    
+    user = db.get_user_by_stytch_id(stytch_user_id)
+
     if not user:
-        raise ValueError(f"User {user_id} not found in database")
-    
+        # Create user if doesn't exist
+        print(f"[DEBUG] User not found, creating new user for stytch_id={stytch_user_id}", file=sys.stderr, flush=True)
+        # We need email from token - try to get it
+        try:
+            access_token = ctx.get_access_token()
+            email = getattr(access_token, 'email', None) or f"{stytch_user_id}@stytch.com"
+        except:
+            email = f"{stytch_user_id}@stytch.com"
+
+        user_id = db.create_or_update_stytch_user(
+            stytch_user_id=stytch_user_id,
+            email=email
+        )
+        user = db.get_user_by_id(user_id)
+
     quendoo_api_key = user.get("quendoo_api_key")
     print(f"[DEBUG] User quendoo_api_key present: {bool(quendoo_api_key)}", file=sys.stderr, flush=True)
-    
+
     if not quendoo_api_key:
         raise ValueError(
-            "Quendoo API key not configured. Please set it up using the set_quendoo_api_key tool first."
+            "Quendoo API key not configured. Please set it up using the web app first."
         )
-    
+
     # Create client with user's API key
     print(f"[DEBUG] Creating QuendooClient with user's API key", file=sys.stderr, flush=True)
     return QuendooClient(api_key=quendoo_api_key)
@@ -458,8 +362,15 @@ try:
         return JSONResponse(oauth_server.get_metadata())
 
     @server.custom_route(path="/.well-known/oauth-protected-resource", methods=["GET"])
-    async def protected_resource_metadata_new(request: Request):
-        """Protected Resource Metadata endpoint (RFC 9728)."""
+    async def protected_resource_metadata(request: Request):
+        """
+        Protected Resource Metadata endpoint (RFC 9728).
+
+        Tells MCP clients:
+        - What resource this is (our MCP server)
+        - What authorization server to use (our server for OAuth)
+        - What scopes are supported
+        """
         # Ensure URLs end with /
         resource = f"{mcp_server_url}/" if not mcp_server_url.endswith("/") else mcp_server_url
         auth_server = f"{mcp_server_url}/" if not mcp_server_url.endswith("/") else mcp_server_url

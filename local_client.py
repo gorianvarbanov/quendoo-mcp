@@ -22,10 +22,9 @@ from mcp.client.sse import sse_client
 
 
 # Configuration
-MCP_SERVER_URL = os.getenv(
-    "MCP_SERVER_URL",
-    "https://quendoo-mcp-server-880871219885.us-central1.run.app"
-)
+# HARDCODED to force correct URL (ignore environment variable for now)
+MCP_SERVER_URL = "https://quendoo-mcp-server-880871219885.us-central1.run.app"
+print(f"[Quendoo MCP] Using HARDCODED server URL: {MCP_SERVER_URL}", file=sys.stderr, flush=True)
 OAUTH_AUTHORIZE_URL = f"{MCP_SERVER_URL}/oauth/authorize"
 OAUTH_TOKEN_URL = f"{MCP_SERVER_URL}/oauth/token"
 OAUTH_CALLBACK_PORT = 3000
@@ -189,43 +188,92 @@ async def get_access_token():
 
 async def main():
     """Main entry point for local MCP client."""
-    print("[Quendoo MCP] Starting local client with OAuth authentication...", file=sys.stderr)
+    print("[Quendoo MCP] Starting local client (lazy OAuth - auth on first tool use)...", file=sys.stderr)
+
+    # FORCE: Do NOT use cached token - always start fresh for lazy OAuth
+    # This ensures we don't use old JWT tokens with wrong RSA keys
+    access_token = None
+    print("[OAuth] Starting without token - will authenticate on first tool use", file=sys.stderr)
 
     try:
-        # Get access token
-        access_token = await get_access_token()
-
-        # Connect to remote MCP server with authentication
+        # Connect to MCP server
         sse_url = f"{MCP_SERVER_URL}/sse"
         print(f"[Quendoo MCP] Connecting to {sse_url}", file=sys.stderr)
 
-        async with httpx.AsyncClient() as http_client:
-            headers = {'Authorization': f'Bearer {access_token}'}
+        # Try to connect (will retry with OAuth if needed)
+        retry_connection = True
+        max_auth_attempts = 2
+        auth_attempt = 0
 
-            async with sse_client(sse_url, headers=headers) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    print("[Quendoo MCP] Connected successfully!", file=sys.stderr)
+        while retry_connection and auth_attempt < max_auth_attempts:
+            retry_connection = False
 
-                    # Now proxy stdio to/from the remote session
-                    # This keeps the connection alive and handles all MCP communication
-                    async def read_stdin():
-                        """Read from stdin and send to remote server."""
-                        while True:
-                            line = await asyncio.get_event_loop().run_in_executor(
-                                None, sys.stdin.readline
-                            )
-                            if not line:
-                                break
-                            await write.send(json.loads(line))
+            headers = {'Authorization': f'Bearer {access_token}'} if access_token else {}
+            print(f"[DEBUG] access_token={access_token}", file=sys.stderr)
+            print(f"[DEBUG] headers={headers}", file=sys.stderr)
 
-                    async def write_stdout():
-                        """Read from remote server and write to stdout."""
-                        async for message in read:
-                            print(json.dumps(message), flush=True)
+            try:
+                async with sse_client(sse_url, headers=headers) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        print("[Quendoo MCP] Connected successfully!", file=sys.stderr)
 
-                    # Run both tasks concurrently
-                    await asyncio.gather(read_stdin(), write_stdout())
+                        # Proxy stdin/stdout
+                        async def read_stdin():
+                            """Read from stdin and send to remote server."""
+                            while True:
+                                line = await asyncio.get_event_loop().run_in_executor(
+                                    None, sys.stdin.readline
+                                )
+                                if not line:
+                                    break
+                                await write.send(json.loads(line))
+
+                        async def write_stdout():
+                            """Read from remote server and write to stdout."""
+                            async for message in read:
+                                print(json.dumps(message), flush=True)
+
+                        # Run both tasks concurrently
+                        await asyncio.gather(read_stdin(), write_stdout())
+
+            except (Exception, BaseExceptionGroup) as e:
+                # Handle both regular exceptions and ExceptionGroups (Python 3.11+)
+                error_str = str(e).lower()
+
+                # For ExceptionGroups, check nested exceptions
+                is_auth_error = False
+                if isinstance(e, BaseExceptionGroup):
+                    # Check if any sub-exception is an auth error
+                    for exc in e.exceptions:
+                        exc_str = str(exc).lower()
+                        if ('unauthorized' in exc_str or '401' in exc_str or
+                            'authentication' in exc_str or 'forbidden' in exc_str):
+                            is_auth_error = True
+                            break
+                else:
+                    # Regular exception
+                    if ('unauthorized' in error_str or '401' in error_str or
+                        'authentication' in error_str or 'forbidden' in error_str):
+                        is_auth_error = True
+
+                if is_auth_error:
+                    auth_attempt += 1
+                    if auth_attempt < max_auth_attempts:
+                        print(f"[OAuth] Authentication required - starting OAuth flow (attempt {auth_attempt})...", file=sys.stderr)
+                        try:
+                            access_token = await perform_oauth_flow()
+                            print("[OAuth] Authentication successful! Reconnecting...", file=sys.stderr)
+                            retry_connection = True
+                        except Exception as oauth_error:
+                            print(f"[OAuth] Authentication failed: {oauth_error}", file=sys.stderr)
+                            raise
+                    else:
+                        print(f"[OAuth] Max authentication attempts reached", file=sys.stderr)
+                        raise
+                else:
+                    # Not an auth error, re-raise
+                    raise
 
     except Exception as e:
         print(f"[Quendoo MCP] Error: {e}", file=sys.stderr)

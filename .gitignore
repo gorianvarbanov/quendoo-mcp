@@ -47,3 +47,7 @@ nul
 # Secrets (don't commit!)
 *_credentials.json
 service-account*.json
+jwt_key.txt
+.quendoo_api_key_cache.json
+*.key
+*.pem

@@ -2,6 +2,20 @@
 
 Model Context Protocol (MCP) server for Quendoo Property Management System with integrated email and voice call capabilities.
 
+## 🚀 Quick Start
+
+### Windows Installation (Recommended)
+
+1. Download or clone this repository
+2. Run `install.bat`
+3. Enter your Quendoo API key when prompted
+4. Restart Claude Desktop
+5. Done! 🎉
+
+For detailed instructions, see [INSTALLATION.md](./INSTALLATION.md)
+
+---
+
 ## Features
 
 ### 🏨 Quendoo PMS Integration

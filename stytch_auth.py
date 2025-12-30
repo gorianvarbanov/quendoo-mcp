@@ -26,10 +26,14 @@ class StytchAuthenticator:
             )
 
         # Initialize Stytch client
+        # Auto-detect environment from project_id
+        environment = "test" if self.project_id.startswith("project-test-") else "live"
+        print(f"[DEBUG] Initializing Stytch client with environment: {environment}", file=sys.stderr, flush=True)
+
         self.client = stytch.Client(
             project_id=self.project_id,
             secret=self.secret,
-            environment="live"  # or "test" for development
+            environment=environment
         )
 
     def validate_token(self, token: str) -> dict[str, Any] | None:
@@ -77,8 +81,16 @@ class StytchAuthenticator:
                     "is_valid": True
                 }
 
-            except jwt.InvalidTokenError as jwt_error:
-                print(f"[DEBUG] JWT validation failed: {jwt_error}, trying session token...", file=sys.stderr, flush=True)
+            except Exception as jwks_error:
+                # Catch PyJWKClientError (wrong key ID) or any JWT validation error
+                print(f"[DEBUG] JWT/JWKS validation failed: {type(jwks_error).__name__}: {jwks_error}", file=sys.stderr, flush=True)
+
+                # If this is an old token with wrong kid, return None (unauthorized)
+                if "signing key" in str(jwks_error).lower() or "kid" in str(jwks_error).lower():
+                    print(f"[DEBUG] Old token with wrong key ID - rejecting", file=sys.stderr, flush=True)
+                    return None
+
+                print(f"[DEBUG] JWT validation failed: {jwks_error}, trying session token...", file=sys.stderr, flush=True)
 
                 # Fallback: Try session token validation (for web app)
                 response = self.client.sessions.authenticate(session_token=token)
