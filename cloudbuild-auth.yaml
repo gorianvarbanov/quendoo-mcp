@@ -1,5 +1,0 @@
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-f', 'Dockerfile.auth', '-t', 'gcr.io/quednoo-chatgtp-mailing/quendoo-mcp-auth', '.']
-images:
-  - 'gcr.io/quednoo-chatgtp-mailing/quendoo-mcp-auth'
