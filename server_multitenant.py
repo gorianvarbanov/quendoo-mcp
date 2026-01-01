@@ -1,4 +1,4 @@
-"""Quendoo MCP Server - Multi-Tenant with FastMCP OAuth 2.1"""
+"""Quendoo MCP Server - Multi-Tenant with FastMCP JWTVerifier"""
 import os
 import sys
 from uuid import UUID
@@ -7,14 +7,15 @@ from typing import Optional
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 
-# Import FastMCP OAuth provider
+# Import FastMCP JWTVerifier
 try:
-    from fastmcp.server.auth.providers import OAuthProvider
-    OAUTH_AVAILABLE = True
+    from fastmcp.server.auth.providers.jwt import JWTVerifier
+    JWT_VERIFIER_AVAILABLE = True
+    print("[INFO] FastMCP JWTVerifier available", file=sys.stderr, flush=True)
 except ImportError:
-    print("[WARNING] FastMCP OAuth not available. Install with: pip install 'fastmcp[auth]'",
+    JWT_VERIFIER_AVAILABLE = False
+    print("[WARNING] FastMCP JWTVerifier not available",
           file=sys.stderr, flush=True)
-    OAUTH_AVAILABLE = False
 
 from tools import (
     AutomationClient,
@@ -31,115 +32,34 @@ from database.models import User, Tenant
 load_dotenv()
 
 # ========================================
-# OAUTH AUTHENTICATION FUNCTIONS
-# ========================================
-
-def verify_user_credentials(username: str, password: str) -> dict:
-    """
-    Verify user credentials against database.
-
-    This function is called by FastMCP OAuthProvider during login.
-
-    Args:
-        username: User's email address
-        password: User's password (plain text)
-
-    Returns:
-        dict with user_id and email if credentials are valid
-
-    Raises:
-        ValueError: If credentials are invalid
-    """
-    print(f"[AUTH] Verifying credentials for: {username}", file=sys.stderr, flush=True)
-
-    try:
-        with get_db_session() as session:
-            user = session.query(User).filter_by(email=username, is_active=True).first()
-
-            if not user:
-                print(f"[AUTH] User not found: {username}", file=sys.stderr, flush=True)
-                raise ValueError("Invalid email or password")
-
-            # Verify password using bcrypt
-            if not auth_manager.verify_password(password, user.password_hash):
-                print(f"[AUTH] Invalid password for: {username}", file=sys.stderr, flush=True)
-                raise ValueError("Invalid email or password")
-
-            print(f"[AUTH] ✓ Credentials valid for: {username}", file=sys.stderr, flush=True)
-
-            return {
-                "user_id": str(user.id),
-                "email": user.email,
-                "full_name": user.full_name
-            }
-
-    except ValueError:
-        raise
-    except Exception as e:
-        print(f"[AUTH] Error verifying credentials: {e}", file=sys.stderr, flush=True)
-        raise ValueError("Authentication error")
-
-
-def get_user_claims(user_info: dict) -> dict:
-    """
-    Get additional claims to include in JWT token.
-
-    This function is called by FastMCP OAuthProvider after successful login
-    to add tenant information to the JWT token.
-
-    Args:
-        user_info: Dictionary from verify_user_credentials
-
-    Returns:
-        dict with additional claims (tenant_id, email, etc.)
-    """
-    user_id = UUID(user_info["user_id"])
-    print(f"[AUTH] Getting claims for user: {user_id}", file=sys.stderr, flush=True)
-
-    try:
-        with get_db_session() as session:
-            tenant = session.query(Tenant).filter_by(user_id=user_id).first()
-
-            if not tenant:
-                print(f"[AUTH] ERROR: No tenant found for user: {user_id}", file=sys.stderr, flush=True)
-                raise ValueError("Tenant not found for user")
-
-            claims = {
-                "user_id": str(user_id),
-                "tenant_id": str(tenant.id),
-                "email": user_info["email"],
-                "full_name": user_info.get("full_name", "")
-            }
-
-            print(f"[AUTH] ✓ Claims generated for tenant: {tenant.id}", file=sys.stderr, flush=True)
-            return claims
-
-    except Exception as e:
-        print(f"[AUTH] Error getting user claims: {e}", file=sys.stderr, flush=True)
-        raise
-
-
-# ========================================
-# INITIALIZE OAUTH PROVIDER
+# INITIALIZE JWT VERIFIER
 # ========================================
 
 auth_provider = None
-if OAUTH_AVAILABLE:
-    base_url = os.getenv("BASE_URL") or "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app"
+if JWT_VERIFIER_AVAILABLE:
+    # Get public key from auth manager
+    from security.auth import auth_manager
 
-    auth_provider = OAuthProvider(
-        base_url=base_url,
-        issuer=base_url,
-        verify_credentials=verify_user_credentials,
-        get_user_claims=get_user_claims,
-        # Token settings
-        access_token_expires_minutes=30,  # 30 minutes
-        refresh_token_expires_days=30,    # 30 days
-    )
+    try:
+        public_key_pem = auth_manager.get_public_key_pem()
+        issuer = os.getenv("JWT_ISSUER", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
+        base_url = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
-    print(f"[AUTH] ✓ OAuth provider initialized with base_url: {base_url}", file=sys.stderr, flush=True)
+        auth_provider = JWTVerifier(
+            public_key=public_key_pem,
+            issuer=issuer,
+            algorithm="RS256",
+            base_url=base_url
+        )
+
+        print(f"[AUTH] ✓ JWTVerifier initialized", file=sys.stderr, flush=True)
+        print(f"[AUTH] ✓ Issuer: {issuer}", file=sys.stderr, flush=True)
+        print(f"[AUTH] ✓ Algorithm: RS256", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize JWTVerifier: {e}", file=sys.stderr, flush=True)
+        auth_provider = None
 else:
-    print("[WARNING] Running without OAuth authentication!", file=sys.stderr, flush=True)
+    print("[WARNING] Running without JWT authentication!", file=sys.stderr, flush=True)
 
 
 # ========================================
@@ -150,7 +70,7 @@ server = FastMCP(
     name="quendoo-pms-mcp-multitenant",
     instructions=(
         "Quendoo Property Management System - Multi-Tenant SaaS\n\n"
-        "🔐 Authentication: OAuth 2.1 with automatic login flow\n"
+        "🔐 Authentication: JWT RS256 tokens issued by web portal\n"
         "All API keys are stored encrypted per tenant\n\n"
         "📋 AVAILABLE TOOLS:\n"
         "- Property Management: Properties, booking modules, availability\n"
@@ -159,8 +79,9 @@ server = FastMCP(
         "- Email: Send HTML emails\n"
         "- Voice Calls: Automated calls with Bulgarian support\n\n"
         "💡 TIP: Each tenant has isolated data and API keys.\n"
+        "🌐 Get your JWT token from: https://portal-851052272168.us-central1.run.app\n"
     ),
-    auth=auth_provider,  # OAuth authentication enabled!
+    auth=auth_provider,  # JWT authentication enabled!
 )
 
 

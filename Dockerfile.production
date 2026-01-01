@@ -25,7 +25,6 @@ COPY tools/ ./tools/
 COPY web_backend/ ./web_backend/
 COPY api_key_manager_v2.py .
 COPY server_multitenant.py .
-COPY production_server.py .
 COPY .env .
 
 # Expose port
@@ -34,7 +33,7 @@ EXPOSE 8080
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
-ENV HOST=0.0.0.0
+ENV MCP_TRANSPORT=sse
 
-# Run production server
-CMD ["python", "production_server.py"]
+# Run FastMCP server with JWTVerifier
+CMD ["python", "server_multitenant.py"]
