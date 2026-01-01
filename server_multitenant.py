@@ -494,9 +494,5 @@ if __name__ == "__main__":
     print(f"✓ Port: {port}", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    # Run with explicit port for Cloud Run compatibility
-    if transport == "sse":
-        import uvicorn
-        uvicorn.run(server.app, host="0.0.0.0", port=port)
-    else:
-        server.run(transport=transport)
+    # FastMCP will use PORT environment variable automatically
+    server.run(transport=transport)
