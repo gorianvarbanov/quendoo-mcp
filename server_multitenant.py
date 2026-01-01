@@ -416,4 +416,4 @@ if __name__ == "__main__":
     print("=" * 60, file=sys.stderr, flush=True)
 
     # FastMCP run with explicit port binding
-    server.run(transport=transport, host="0.0.0.0", port=port)
+    server.run(transport=transport, port=port)
