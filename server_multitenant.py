@@ -81,7 +81,7 @@ server = FastMCP(
         "💡 TIP: Each tenant has isolated data and API keys.\n"
         "🌐 Get your JWT token from: https://portal-851052272168.us-central1.run.app\n"
     ),
-    auth=auth_provider,  # JWT authentication enabled!
+    token_verifier=auth_provider,  # JWT token verification enabled!
 )
 
 
