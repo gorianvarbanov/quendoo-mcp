@@ -403,11 +403,11 @@ if __name__ == "__main__":
     print("Quendoo MCP Server - Multi-Tenant with OAuth 2.1", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    if OAUTH_AVAILABLE:
-        print("✓ OAuth authentication: ENABLED", file=sys.stderr, flush=True)
+    if JWT_VERIFIER_AVAILABLE:
+        print("✓ JWT authentication: ENABLED", file=sys.stderr, flush=True)
         print(f"✓ Base URL: {auth_provider.base_url if auth_provider else 'N/A'}", file=sys.stderr, flush=True)
     else:
-        print("⚠ OAuth authentication: DISABLED", file=sys.stderr, flush=True)
+        print("⚠ JWT authentication: DISABLED", file=sys.stderr, flush=True)
 
     transport = os.getenv("MCP_TRANSPORT", "sse").lower()
     port = int(os.getenv("PORT", "8080"))
