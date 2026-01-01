@@ -1,0 +1,36 @@
+steps:
+  # Build the Docker image with FastMCP OAuth server
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.mcp'
+      - '-t'
+      - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
+      - '.'
+
+  # Push the image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'quendoo-mcp-multitenant'
+      - '--image'
+      - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'DATABASE_URL=postgresql://postgres.tjrtbhemajqwzzdzyjtc:Newestate2019%40@aws-1-eu-west-1.pooler.supabase.com:6543/postgres,JWT_PRIVATE_KEY=_pP0PHWHEOLtuj3aPBsQ3Vt8J6ohvCWRvHQCVGzoMEY,MCP_TRANSPORT=sse,BASE_URL=https://quendoo-mcp-multitenant-851052272168.us-central1.run.app'
+
+images:
+  - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
