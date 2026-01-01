@@ -1,10 +1,10 @@
 steps:
-  # Build the Docker image with FastMCP OAuth server
+  # Build the Docker image with production FastAPI wrapper
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-f'
-      - 'Dockerfile.mcp'
+      - 'Dockerfile.production'
       - '-t'
       - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
       - '.'
