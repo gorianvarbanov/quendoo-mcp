@@ -1,0 +1,40 @@
+# Production Dockerfile for Quendoo MCP Multi-Tenant Server with FastAPI
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# FastAPI and uvicorn are already in requirements.txt
+# No additional production dependencies needed
+
+# Copy application code
+COPY database/ ./database/
+COPY security/ ./security/
+COPY tools/ ./tools/
+COPY web_backend/ ./web_backend/
+COPY api_key_manager_v2.py .
+COPY server_multitenant.py .
+COPY production_server.py .
+COPY .env .
+
+# Expose port
+EXPOSE 8080
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+ENV HOST=0.0.0.0
+
+# Run production server
+CMD ["python", "production_server.py"]
