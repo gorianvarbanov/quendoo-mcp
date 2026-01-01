@@ -91,7 +91,7 @@ rpds-py==0.30.0
 shellingham==1.5.4
 six==1.17.0
 sortedcontainers==2.4.0
-sse-starlette==2.2.3
+sse-starlette==2.2.1
 starlette==0.41.3
 stytch==14.0.0
 typer==0.21.0
