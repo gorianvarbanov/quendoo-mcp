@@ -30,7 +30,7 @@ steps:
       - 'us-central1'
       - '--allow-unauthenticated'
       - '--set-env-vars'
-      - 'MCP_TRANSPORT=sse,PORT=8080'
+      - 'MCP_TRANSPORT=sse'
 
 images:
   - 'gcr.io/quendoo-mcp-prod/quendoo-mcp-multitenant:latest'
