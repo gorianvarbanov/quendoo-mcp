@@ -415,5 +415,5 @@ if __name__ == "__main__":
     print(f"✓ Port: {port}", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    # FastMCP will use PORT environment variable automatically
-    server.run(transport=transport)
+    # FastMCP run with explicit port binding
+    server.run(transport=transport, host="0.0.0.0", port=port)
