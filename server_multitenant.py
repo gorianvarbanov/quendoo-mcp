@@ -7,9 +7,10 @@ from typing import Optional
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 
-# Import FastMCP JWTVerifier
+# Import FastMCP JWTVerifier and AuthSettings
 try:
     from fastmcp.server.auth.providers.jwt import JWTVerifier
+    from mcp.server.auth.settings import AuthSettings
     JWT_VERIFIER_AVAILABLE = True
     print("[INFO] FastMCP JWTVerifier available", file=sys.stderr, flush=True)
 except ImportError:
@@ -32,10 +33,12 @@ from database.models import User, Tenant
 load_dotenv()
 
 # ========================================
-# INITIALIZE JWT VERIFIER
+# INITIALIZE JWT VERIFIER & AUTH SETTINGS
 # ========================================
 
-auth_provider = None
+token_verifier = None
+auth_settings = None
+
 if JWT_VERIFIER_AVAILABLE:
     # Get public key from auth manager
     from security.auth import auth_manager
@@ -45,11 +48,17 @@ if JWT_VERIFIER_AVAILABLE:
         issuer = os.getenv("JWT_ISSUER", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
         base_url = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
-        auth_provider = JWTVerifier(
+        token_verifier = JWTVerifier(
             public_key=public_key_pem,
             issuer=issuer,
             algorithm="RS256",
             base_url=base_url
+        )
+
+        # Create AuthSettings for FastMCP
+        auth_settings = AuthSettings(
+            issuer_url=issuer,
+            resource_server_url=base_url
         )
 
         print(f"[AUTH] ✓ JWTVerifier initialized", file=sys.stderr, flush=True)
@@ -57,7 +66,8 @@ if JWT_VERIFIER_AVAILABLE:
         print(f"[AUTH] ✓ Algorithm: RS256", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[ERROR] Failed to initialize JWTVerifier: {e}", file=sys.stderr, flush=True)
-        auth_provider = None
+        token_verifier = None
+        auth_settings = None
 else:
     print("[WARNING] Running without JWT authentication!", file=sys.stderr, flush=True)
 
@@ -81,7 +91,8 @@ server = FastMCP(
         "💡 TIP: Each tenant has isolated data and API keys.\n"
         "🌐 Get your JWT token from: https://portal-851052272168.us-central1.run.app\n"
     ),
-    token_verifier=auth_provider,  # JWT token verification enabled!
+    auth=auth_settings,  # Auth settings with issuer and resource server URL
+    token_verifier=token_verifier,  # JWT token verification enabled!
 )
 
 
@@ -403,9 +414,9 @@ if __name__ == "__main__":
     print("Quendoo MCP Server - Multi-Tenant with OAuth 2.1", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    if JWT_VERIFIER_AVAILABLE:
+    if JWT_VERIFIER_AVAILABLE and token_verifier:
         print("✓ JWT authentication: ENABLED", file=sys.stderr, flush=True)
-        print(f"✓ Base URL: {auth_provider.base_url if auth_provider else 'N/A'}", file=sys.stderr, flush=True)
+        print(f"✓ Base URL: {token_verifier.base_url if token_verifier else 'N/A'}", file=sys.stderr, flush=True)
     else:
         print("⚠ JWT authentication: DISABLED", file=sys.stderr, flush=True)
 
