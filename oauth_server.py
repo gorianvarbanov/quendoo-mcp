@@ -54,7 +54,7 @@ def cleanup_expired_codes():
 async def oauth_metadata():
     """OAuth 2.0 Authorization Server Metadata"""
     return {
-        "issuer": BASE_URL,
+        "issuer": f"{SUPABASE_URL}/auth/v1",  # Match Supabase token issuer
         "authorization_endpoint": f"{BASE_URL}/authorize",
         "token_endpoint": f"{BASE_URL}/token",
         "response_types_supported": ["code"],

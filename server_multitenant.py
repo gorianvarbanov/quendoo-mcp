@@ -61,9 +61,9 @@ if JWT_VERIFIER_AVAILABLE:
                 base_url=base_url
             )
 
-            # Create auth settings - point to our OAuth server
+            # Create auth settings - use Supabase as issuer (matches JWT tokens)
             auth_settings = AuthSettings(
-                issuer_url=oauth_server_url,
+                issuer_url=f"{supabase_url}/auth/v1",
                 resource_server_url=base_url
             )
 
