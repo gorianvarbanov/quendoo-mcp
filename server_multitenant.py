@@ -6,16 +6,16 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.auth.settings import AuthSettings
 
-# Import FastMCP JWTVerifier and AuthSettings
+# Import FastMCP Supabase Auth Provider
 try:
-    from fastmcp.server.auth.providers.jwt import JWTVerifier
-    from mcp.server.auth.settings import AuthSettings
-    JWT_VERIFIER_AVAILABLE = True
-    print("[INFO] FastMCP JWTVerifier available", file=sys.stderr, flush=True)
+    from fastmcp.server.auth.providers.supabase import SupabaseProvider
+    SUPABASE_AUTH_AVAILABLE = True
+    print("[INFO] FastMCP Supabase Auth available", file=sys.stderr, flush=True)
 except ImportError:
-    JWT_VERIFIER_AVAILABLE = False
-    print("[WARNING] FastMCP JWTVerifier not available",
+    SUPABASE_AUTH_AVAILABLE = False
+    print("[WARNING] FastMCP Supabase Auth not available",
           file=sys.stderr, flush=True)
 
 from tools import (
@@ -33,43 +33,40 @@ from database.models import User, Tenant
 load_dotenv()
 
 # ========================================
-# INITIALIZE JWT VERIFIER & AUTH SETTINGS
+# INITIALIZE SUPABASE AUTH PROVIDER
 # ========================================
 
-token_verifier = None
+auth_provider = None
 auth_settings = None
 
-if JWT_VERIFIER_AVAILABLE:
-    # Get public key from auth manager
-    from security.auth import auth_manager
-
+if SUPABASE_AUTH_AVAILABLE:
     try:
-        public_key_pem = auth_manager.get_public_key_pem()
-        issuer = os.getenv("JWT_ISSUER", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
+        # Load Supabase configuration from environment
+        supabase_url = os.getenv("SUPABASE_URL", "https://tjrtbhemajqwzzdzyjtc.supabase.co")
         base_url = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
-        token_verifier = JWTVerifier(
-            public_key=public_key_pem,
-            issuer=issuer,
-            algorithm="RS256",
-            base_url=base_url
+        # Create Supabase auth provider
+        auth_provider = SupabaseProvider(
+            project_url=supabase_url,
+            base_url=base_url,
+            algorithm="HS256"  # Supabase default
         )
 
-        # Create AuthSettings for FastMCP
+        # Create auth settings
         auth_settings = AuthSettings(
-            issuer_url=issuer,
+            issuer_url=f"{supabase_url}/auth/v1",
             resource_server_url=base_url
         )
 
-        print(f"[AUTH] ✓ JWTVerifier initialized", file=sys.stderr, flush=True)
-        print(f"[AUTH] ✓ Issuer: {issuer}", file=sys.stderr, flush=True)
-        print(f"[AUTH] ✓ Algorithm: RS256", file=sys.stderr, flush=True)
+        print(f"[AUTH] ✓ Supabase Auth initialized", file=sys.stderr, flush=True)
+        print(f"[AUTH] ✓ Project URL: {supabase_url}", file=sys.stderr, flush=True)
+        print(f"[AUTH] ✓ Base URL: {base_url}", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"[ERROR] Failed to initialize JWTVerifier: {e}", file=sys.stderr, flush=True)
-        token_verifier = None
+        print(f"[ERROR] Failed to initialize Supabase Auth: {e}", file=sys.stderr, flush=True)
+        auth_provider = None
         auth_settings = None
 else:
-    print("[WARNING] Running without JWT authentication!", file=sys.stderr, flush=True)
+    print("[WARNING] Running without authentication!", file=sys.stderr, flush=True)
 
 
 # ========================================
@@ -80,7 +77,7 @@ server = FastMCP(
     name="quendoo-pms-mcp-multitenant",
     instructions=(
         "Quendoo Property Management System - Multi-Tenant SaaS\n\n"
-        "🔐 Authentication: JWT RS256 tokens issued by web portal\n"
+        "🔐 Authentication: Supabase OAuth with automatic login flow\n"
         "All API keys are stored encrypted per tenant\n\n"
         "📋 AVAILABLE TOOLS:\n"
         "- Property Management: Properties, booking modules, availability\n"
@@ -89,12 +86,12 @@ server = FastMCP(
         "- Email: Send HTML emails\n"
         "- Voice Calls: Automated calls with Bulgarian support\n\n"
         "💡 TIP: Each tenant has isolated data and API keys.\n"
-        "🌐 Get your JWT token from: https://portal-851052272168.us-central1.run.app\n"
+        "🌐 Login via Supabase Auth - automatic OAuth flow\n"
     ),
     host="0.0.0.0",  # Listen on all interfaces
     port=int(os.getenv("PORT", "8080")),  # Use Cloud Run's PORT
-    auth=auth_settings,  # Auth settings with issuer and resource server URL
-    token_verifier=token_verifier,  # JWT token verification enabled!
+    auth=auth_settings,  # Auth settings
+    auth_server_provider=auth_provider,  # Supabase OAuth provider
 )
 
 
@@ -106,7 +103,7 @@ def get_tenant_id_from_context(ctx: Context) -> UUID:
     """
     Extract tenant_id from authenticated context.
 
-    FastMCP provides ctx.auth_claims after successful OAuth authentication.
+    Supabase JWT provides user_id (from auth.users), which we use to look up tenant.
 
     Args:
         ctx: MCP Context with auth_claims
@@ -119,14 +116,27 @@ def get_tenant_id_from_context(ctx: Context) -> UUID:
     """
     if not hasattr(ctx, 'auth_claims') or not ctx.auth_claims:
         raise ValueError(
-            "Not authenticated. Please authenticate via OAuth flow."
+            "Not authenticated. Please authenticate via Supabase OAuth flow."
         )
 
-    tenant_id_str = ctx.auth_claims.get('tenant_id')
-    if not tenant_id_str:
-        raise ValueError("Tenant ID not found in authentication claims")
+    # Supabase JWT contains 'sub' claim with user_id from auth.users
+    user_id_str = ctx.auth_claims.get('sub')
+    if not user_id_str:
+        raise ValueError("User ID not found in authentication claims")
 
-    return UUID(tenant_id_str)
+    user_id = UUID(user_id_str)
+
+    # Look up tenant for this user
+    with get_db_session() as session:
+        tenant = session.query(Tenant).filter_by(user_id=user_id).first()
+
+        if not tenant:
+            raise ValueError(
+                f"Tenant not found for user {user_id}. "
+                "Please contact support."
+            )
+
+        return tenant.id
 
 
 def get_quendoo_client(ctx: Context) -> QuendooClient:
@@ -416,11 +426,10 @@ if __name__ == "__main__":
     print("Quendoo MCP Server - Multi-Tenant with OAuth 2.1", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    if JWT_VERIFIER_AVAILABLE and token_verifier:
-        print("✓ JWT authentication: ENABLED", file=sys.stderr, flush=True)
-        print(f"✓ Base URL: {token_verifier.base_url if token_verifier else 'N/A'}", file=sys.stderr, flush=True)
+    if SUPABASE_AUTH_AVAILABLE and auth_provider:
+        print("✓ Supabase OAuth authentication: ENABLED", file=sys.stderr, flush=True)
     else:
-        print("⚠ JWT authentication: DISABLED", file=sys.stderr, flush=True)
+        print("⚠ Authentication: DISABLED", file=sys.stderr, flush=True)
 
     transport = os.getenv("MCP_TRANSPORT", "sse").lower()
     port = int(os.getenv("PORT", "8080"))
