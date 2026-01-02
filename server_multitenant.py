@@ -91,6 +91,8 @@ server = FastMCP(
         "💡 TIP: Each tenant has isolated data and API keys.\n"
         "🌐 Get your JWT token from: https://portal-851052272168.us-central1.run.app\n"
     ),
+    host="0.0.0.0",  # Listen on all interfaces
+    port=int(os.getenv("PORT", "8080")),  # Use Cloud Run's PORT
     auth=auth_settings,  # Auth settings with issuer and resource server URL
     token_verifier=token_verifier,  # JWT token verification enabled!
 )
