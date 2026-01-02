@@ -44,6 +44,7 @@ if JWT_VERIFIER_AVAILABLE:
         # Load configuration from environment
         supabase_url = os.getenv("SUPABASE_URL", "https://tjrtbhemajqwzzdzyjtc.supabase.co")
         supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        oauth_server_url = os.getenv("OAUTH_SERVER_URL", "https://quendoo-oauth-server-851052272168.us-central1.run.app")
         base_url = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
         if not supabase_jwt_secret:
@@ -52,6 +53,7 @@ if JWT_VERIFIER_AVAILABLE:
             auth_settings = None
         else:
             # Create JWT token verifier for Supabase tokens
+            # Verify tokens issued by Supabase but accept from our OAuth server
             token_verifier = JWTVerifier(
                 public_key=supabase_jwt_secret,
                 issuer=f"{supabase_url}/auth/v1",
@@ -59,14 +61,15 @@ if JWT_VERIFIER_AVAILABLE:
                 base_url=base_url
             )
 
-            # Create auth settings
+            # Create auth settings - point to our OAuth server
             auth_settings = AuthSettings(
-                issuer_url=f"{supabase_url}/auth/v1",
+                issuer_url=oauth_server_url,
                 resource_server_url=base_url
             )
 
             print(f"[AUTH] ✓ JWT Token Verifier initialized", file=sys.stderr, flush=True)
-            print(f"[AUTH] ✓ Issuer: {supabase_url}/auth/v1", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ OAuth Server: {oauth_server_url}", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ Token Issuer: {supabase_url}/auth/v1", file=sys.stderr, flush=True)
             print(f"[AUTH] ✓ Resource Server: {base_url}", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[ERROR] Failed to initialize JWT Verifier: {e}", file=sys.stderr, flush=True)
