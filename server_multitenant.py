@@ -447,5 +447,6 @@ if __name__ == "__main__":
     print(f"✓ Port: {port}", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    # FastMCP run (PORT environment variable will be used automatically)
-    server.run(transport=transport)
+    # FastMCP run with streamable-http transport (supports both GET and POST)
+    # This is more compatible with modern MCP clients like Claude Desktop
+    server.run(transport="streamable-http")
