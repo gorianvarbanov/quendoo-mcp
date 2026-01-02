@@ -5,16 +5,19 @@ Provides:
 - /authorize endpoint with login form
 - /token endpoint for code exchange
 - /.well-known/oauth-authorization-server metadata
+- Issues JWT tokens signed with our own key
 """
 import os
 import secrets
 import hashlib
 import base64
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from urllib.parse import urlencode, parse_qs, urlparse
 
 import requests
+import jwt
 from fastapi import FastAPI, Request, Form, HTTPException, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +39,7 @@ app.add_middleware(
 # Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 BASE_URL = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
 # In-memory storage for authorization codes (5 min TTL)
@@ -54,7 +58,7 @@ def cleanup_expired_codes():
 async def oauth_metadata():
     """OAuth 2.0 Authorization Server Metadata"""
     return {
-        "issuer": f"{SUPABASE_URL}/auth/v1",  # Match Supabase token issuer
+        "issuer": BASE_URL,  # OAuth server is the issuer
         "authorization_endpoint": f"{BASE_URL}/authorize",
         "token_endpoint": f"{BASE_URL}/token",
         "response_types_supported": ["code"],
@@ -261,7 +265,6 @@ async def authorize_post(
     # Login successful - get user data
     auth_data = auth_response.json()
     user = auth_data["user"]
-    access_token = auth_data["access_token"]
 
     # Generate authorization code
     code = secrets.token_urlsafe(32)
@@ -271,7 +274,7 @@ async def authorize_post(
     auth_codes[code] = {
         "user_id": user["id"],
         "email": user["email"],
-        "access_token": access_token,
+        "user_metadata": user.get("user_metadata", {}),
         "code_challenge": code_challenge,
         "created_at": datetime.utcnow(),
         "expires_at": datetime.utcnow() + timedelta(minutes=5),
@@ -323,8 +326,23 @@ async def token_exchange(
         if challenge != code_data["code_challenge"]:
             raise HTTPException(400, "Invalid code_verifier")
 
-    # Return access token (Supabase JWT)
-    access_token = code_data["access_token"]
+    # Generate our own JWT token
+    user_id = code_data["user_id"]
+    email = code_data["email"]
+
+    # Create JWT payload
+    payload = {
+        "sub": user_id,  # Subject (user ID)
+        "email": email,
+        "iss": BASE_URL,  # Issuer (OAuth server)
+        "aud": BASE_URL,  # Audience
+        "iat": datetime.utcnow(),
+        "exp": datetime.utcnow() + timedelta(days=30),
+        "jti": str(uuid.uuid4()),
+    }
+
+    # Sign token with Supabase JWT secret (HMAC HS256)
+    access_token = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
 
     # Delete used code (one-time use)
     del auth_codes[code]
@@ -332,7 +350,7 @@ async def token_exchange(
     return {
         "access_token": access_token,
         "token_type": "Bearer",
-        "expires_in": 3600,  # Supabase default
+        "expires_in": 2592000,  # 30 days
     }
 
 

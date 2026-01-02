@@ -52,24 +52,23 @@ if JWT_VERIFIER_AVAILABLE:
             token_verifier = None
             auth_settings = None
         else:
-            # Create JWT token verifier for Supabase tokens
-            # Verify tokens issued by Supabase but accept from our OAuth server
+            # Create JWT token verifier for OAuth server tokens
+            # Tokens are signed with Supabase JWT secret but issued by OAuth server
             token_verifier = JWTVerifier(
                 public_key=supabase_jwt_secret,
-                issuer=f"{supabase_url}/auth/v1",
-                algorithm="HS256",  # Supabase uses HMAC
+                issuer=oauth_server_url,  # OAuth server is the issuer
+                algorithm="HS256",  # HMAC HS256
                 base_url=base_url
             )
 
-            # Create auth settings - use Supabase as issuer (matches JWT tokens)
+            # Create auth settings - use OAuth server as issuer
             auth_settings = AuthSettings(
-                issuer_url=f"{supabase_url}/auth/v1",
+                issuer_url=oauth_server_url,
                 resource_server_url=base_url
             )
 
             print(f"[AUTH] ✓ JWT Token Verifier initialized", file=sys.stderr, flush=True)
-            print(f"[AUTH] ✓ OAuth Server: {oauth_server_url}", file=sys.stderr, flush=True)
-            print(f"[AUTH] ✓ Token Issuer: {supabase_url}/auth/v1", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ OAuth Server (Issuer): {oauth_server_url}", file=sys.stderr, flush=True)
             print(f"[AUTH] ✓ Resource Server: {base_url}", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[ERROR] Failed to initialize JWT Verifier: {e}", file=sys.stderr, flush=True)
