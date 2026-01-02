@@ -8,14 +8,14 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.auth.settings import AuthSettings
 
-# Import FastMCP Supabase Auth Provider
+# Import JWT Token Verifier
 try:
-    from fastmcp.server.auth.providers.supabase import SupabaseProvider
-    SUPABASE_AUTH_AVAILABLE = True
-    print("[INFO] FastMCP Supabase Auth available", file=sys.stderr, flush=True)
-except ImportError:
-    SUPABASE_AUTH_AVAILABLE = False
-    print("[WARNING] FastMCP Supabase Auth not available",
+    from fastmcp.server.auth.providers.jwt import JWTVerifier
+    JWT_VERIFIER_AVAILABLE = True
+    print("[INFO] JWT Token Verifier available", file=sys.stderr, flush=True)
+except ImportError as e:
+    JWT_VERIFIER_AVAILABLE = False
+    print(f"[WARNING] JWT Token Verifier not available: {e}",
           file=sys.stderr, flush=True)
 
 from tools import (
@@ -33,37 +33,44 @@ from database.models import User, Tenant
 load_dotenv()
 
 # ========================================
-# INITIALIZE SUPABASE AUTH PROVIDER
+# INITIALIZE JWT TOKEN VERIFIER
 # ========================================
 
-auth_provider = None
+token_verifier = None
 auth_settings = None
 
-if SUPABASE_AUTH_AVAILABLE:
+if JWT_VERIFIER_AVAILABLE:
     try:
-        # Load Supabase configuration from environment
+        # Load configuration from environment
         supabase_url = os.getenv("SUPABASE_URL", "https://tjrtbhemajqwzzdzyjtc.supabase.co")
+        supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
         base_url = os.getenv("BASE_URL", "https://quendoo-mcp-multitenant-851052272168.us-central1.run.app")
 
-        # Create Supabase auth provider
-        auth_provider = SupabaseProvider(
-            project_url=supabase_url,
-            base_url=base_url,
-            algorithm="HS256"  # Supabase default
-        )
+        if not supabase_jwt_secret:
+            print("[ERROR] SUPABASE_JWT_SECRET not set!", file=sys.stderr, flush=True)
+            token_verifier = None
+            auth_settings = None
+        else:
+            # Create JWT token verifier for Supabase tokens
+            token_verifier = JWTVerifier(
+                public_key=supabase_jwt_secret,
+                issuer=f"{supabase_url}/auth/v1",
+                algorithm="HS256",  # Supabase uses HMAC
+                base_url=base_url
+            )
 
-        # Create auth settings
-        auth_settings = AuthSettings(
-            issuer_url=f"{supabase_url}/auth/v1",
-            resource_server_url=base_url
-        )
+            # Create auth settings
+            auth_settings = AuthSettings(
+                issuer_url=f"{supabase_url}/auth/v1",
+                resource_server_url=base_url
+            )
 
-        print(f"[AUTH] ✓ Supabase Auth initialized", file=sys.stderr, flush=True)
-        print(f"[AUTH] ✓ Project URL: {supabase_url}", file=sys.stderr, flush=True)
-        print(f"[AUTH] ✓ Base URL: {base_url}", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ JWT Token Verifier initialized", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ Issuer: {supabase_url}/auth/v1", file=sys.stderr, flush=True)
+            print(f"[AUTH] ✓ Resource Server: {base_url}", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"[ERROR] Failed to initialize Supabase Auth: {e}", file=sys.stderr, flush=True)
-        auth_provider = None
+        print(f"[ERROR] Failed to initialize JWT Verifier: {e}", file=sys.stderr, flush=True)
+        token_verifier = None
         auth_settings = None
 else:
     print("[WARNING] Running without authentication!", file=sys.stderr, flush=True)
@@ -77,7 +84,7 @@ server = FastMCP(
     name="quendoo-pms-mcp-multitenant",
     instructions=(
         "Quendoo Property Management System - Multi-Tenant SaaS\n\n"
-        "🔐 Authentication: Supabase OAuth with automatic login flow\n"
+        "🔐 Authentication: Supabase JWT tokens\n"
         "All API keys are stored encrypted per tenant\n\n"
         "📋 AVAILABLE TOOLS:\n"
         "- Property Management: Properties, booking modules, availability\n"
@@ -86,12 +93,12 @@ server = FastMCP(
         "- Email: Send HTML emails\n"
         "- Voice Calls: Automated calls with Bulgarian support\n\n"
         "💡 TIP: Each tenant has isolated data and API keys.\n"
-        "🌐 Login via Supabase Auth - automatic OAuth flow\n"
+        "🔐 Authenticate via OAuth server, then use Supabase JWT tokens\n"
     ),
     host="0.0.0.0",  # Listen on all interfaces
     port=int(os.getenv("PORT", "8080")),  # Use Cloud Run's PORT
     auth=auth_settings,  # Auth settings
-    auth_server_provider=auth_provider,  # Supabase OAuth provider
+    token_verifier=token_verifier,  # JWT token verifier
 )
 
 
@@ -423,11 +430,11 @@ else:
 
 if __name__ == "__main__":
     print("=" * 60, file=sys.stderr, flush=True)
-    print("Quendoo MCP Server - Multi-Tenant with OAuth 2.1", file=sys.stderr, flush=True)
+    print("Quendoo MCP Server - Multi-Tenant with JWT Auth", file=sys.stderr, flush=True)
     print("=" * 60, file=sys.stderr, flush=True)
 
-    if SUPABASE_AUTH_AVAILABLE and auth_provider:
-        print("✓ Supabase OAuth authentication: ENABLED", file=sys.stderr, flush=True)
+    if JWT_VERIFIER_AVAILABLE and token_verifier:
+        print("✓ JWT Token Verification: ENABLED", file=sys.stderr, flush=True)
     else:
         print("⚠ Authentication: DISABLED", file=sys.stderr, flush=True)
 
